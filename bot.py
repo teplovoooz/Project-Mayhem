@@ -1,12 +1,12 @@
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 import time
 import json
 import os
@@ -20,22 +20,18 @@ class TSUAssistantBot:
     
     def start_driver(self):
         """Инициализация веб-драйвера"""
-        options = webdriver.ChromeOptions()
+        options = webdriver.FirefoxOptions()
         options.add_argument("--disable-logging")
-        options.add_argument("--log-level=3")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
+        options.set_preference("browser.cache.disk.enable", False)
+        options.set_preference("browser.cache.memory.enable", False)
         try:
-            driver_path = ChromeDriverManager().install()
-            if not driver_path.endswith('.exe'):
-                import os
-                driver_path = os.path.join(driver_path, 'chromedriver.exe')
+            driver_path = GeckoDriverManager().install()
             service = Service(driver_path)
-            self.driver = webdriver.Chrome(service=service, options=options)
+            self.driver = webdriver.Firefox(service=service, options=options)
         except Exception as e:
             print(f"Ошибка с webdriver-manager: {e}")
-            print("Пробую запустить Chrome напрямую...")
-            self.driver = webdriver.Chrome(options=options)
+            print("Пробую запустить Firefox напрямую...")
+            self.driver = webdriver.Firefox(options=options)
         
         # Увеличиваем timeout
         self.driver.set_page_load_timeout(60)
