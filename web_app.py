@@ -1,17 +1,31 @@
 from flask import Flask, render_template, request, jsonify
 import json
 import os
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import threading
+import time
 from bot import TSUAssistantBot
 
 app = Flask(__name__)
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.json')
 LOGS_PATH = os.path.join(os.path.dirname(__file__), 'logs.txt')
+SCHEDULE_PATH = os.path.join(os.path.dirname(__file__), 'schedule.json')
 
 active_bot = None
 bot_thread = None
+scheduler_thread = None
+scheduler_running = False
+
+def load_schedule():
+    if os.path.exists(SCHEDULE_PATH):
+        with open(SCHEDULE_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return []
+
+def save_schedule(schedule):
+    with open(SCHEDULE_PATH, 'w', encoding='utf-8') as f:
+        json.dump(schedule, f, ensure_ascii=False, indent=2)
 
 def load_config():
     if os.path.exists(CONFIG_PATH):
@@ -46,6 +60,35 @@ def run_bot(event_id, fio, duration):
         if active_bot:
             active_bot.close()
         active_bot = None
+
+def scheduler_worker():
+    global scheduler_running, bot_thread, active_bot
+    log_message("📅 Планировщик запущен")
+    while scheduler_running:
+        try:
+            now = datetime.now()
+            current_time = now.strftime("%H:%M")
+            schedule = load_schedule()
+            config = load_config()
+            fio = config.get('user_fio', '')
+            
+            for lesson in schedule:
+                if not lesson.get('enabled', True):
+                    continue
+                lesson_time = lesson.get('time', '')
+                if lesson_time == current_time and active_bot is None:
+                    event_id = lesson.get('event_id', '')
+                    duration = lesson.get('duration', 90)
+                    lesson_name = lesson.get('name', 'Без названия')
+                    log_message(f"⏰ Автозапуск: {lesson_name} ({event_id})")
+                    bot_thread = threading.Thread(target=run_bot, args=(event_id, fio, duration), daemon=True)
+                    bot_thread.start()
+                    time.sleep(61)
+                    break
+        except Exception as e:
+            log_message(f"✗ Ошибка планировщика: {e}")
+        time.sleep(30)
+    log_message("📅 Планировщик остановлен")
 
 @app.route('/')
 def index():
@@ -111,6 +154,69 @@ def clear_logs():
     open(LOGS_PATH, 'w', encoding='utf-8').close()
     log_message("✓ Логи очищены")
     return jsonify({"status": "ok"})
+
+@app.route('/api/schedule', methods=['GET'])
+def get_schedule():
+    return jsonify(load_schedule())
+
+@app.route('/api/schedule', methods=['POST'])
+def add_schedule_item():
+    data = request.json
+    schedule = load_schedule()
+    new_lesson = {
+        "id": len(schedule) + 1,
+        "name": data.get('name', 'Без названия'),
+        "event_id": data.get('event_id', ''),
+        "time": data.get('time', ''),
+        "duration": int(data.get('duration', 90)),
+        "enabled": True
+    }
+    schedule.append(new_lesson)
+    save_schedule(schedule)
+    log_message(f"✓ Добавлена пара: {new_lesson['name']} в {new_lesson['time']}")
+    return jsonify({"status": "ok", "lesson": new_lesson})
+
+@app.route('/api/schedule/<int:lesson_id>', methods=['DELETE'])
+def delete_schedule_item(lesson_id):
+    schedule = load_schedule()
+    schedule = [l for l in schedule if l.get('id') != lesson_id]
+    for i, lesson in enumerate(schedule):
+        lesson['id'] = i + 1
+    save_schedule(schedule)
+    log_message(f"✓ Удалена пара ID {lesson_id}")
+    return jsonify({"status": "ok"})
+
+@app.route('/api/schedule/<int:lesson_id>/toggle', methods=['POST'])
+def toggle_schedule_item(lesson_id):
+    schedule = load_schedule()
+    for lesson in schedule:
+        if lesson.get('id') == lesson_id:
+            lesson['enabled'] = not lesson.get('enabled', True)
+            status = "включена" if lesson['enabled'] else "отключена"
+            log_message(f"✓ Пара '{lesson['name']}' {status}")
+            break
+    save_schedule(schedule)
+    return jsonify({"status": "ok"})
+
+@app.route('/api/scheduler/start', methods=['POST'])
+def start_scheduler():
+    global scheduler_thread, scheduler_running
+    if scheduler_running:
+        return jsonify({"status": "error", "message": "Планировщик уже запущен"}), 400
+    scheduler_running = True
+    scheduler_thread = threading.Thread(target=scheduler_worker, daemon=True)
+    scheduler_thread.start()
+    return jsonify({"status": "ok", "message": "Планировщик запущен"})
+
+@app.route('/api/scheduler/stop', methods=['POST'])
+def stop_scheduler():
+    global scheduler_running
+    scheduler_running = False
+    return jsonify({"status": "ok", "message": "Планировщик остановлен"})
+
+@app.route('/api/scheduler/status', methods=['GET'])
+def scheduler_status():
+    return jsonify({"running": scheduler_running})
 
 if __name__ == '__main__':
     if not os.path.exists(LOGS_PATH):

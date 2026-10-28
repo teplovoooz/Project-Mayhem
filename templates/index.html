@@ -27,6 +27,13 @@
         .status { padding: 10px; background: #111; border-radius: 4px; margin-bottom: 15px; border-left: 3px solid #666; }
         .status.active { border-left-color: #22D3EE; color: #22D3EE; }
         #logs { background: #111; border: 1px solid #333; border-radius: 4px; padding: 15px; height: 250px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #aaa; white-space: pre-wrap; word-wrap: break-word; }
+        .lesson-item { background: #111; padding: 10px; border-radius: 4px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; border-left: 3px solid #38BDF8; }
+        .lesson-item.disabled { opacity: 0.5; border-left-color: #666; }
+        .lesson-info { flex: 1; }
+        .lesson-name { font-weight: bold; color: #38BDF8; }
+        .lesson-details { font-size: 11px; color: #888; margin-top: 3px; }
+        .lesson-actions { display: flex; gap: 5px; }
+        .lesson-actions button { padding: 5px 10px; font-size: 11px; min-width: 60px; }
     </style>
 </head>
 <body>
@@ -60,6 +67,26 @@
                 <input type="text" id="fio" value="{{ config.user_fio }}">
             </div>
             <button class="btn-primary" onclick="saveFIO()">Сохранить</button>
+        </div>
+
+        <div class="section">
+            <h2>Расписание</h2>
+            <div class="status" id="schedulerStatus">● Планировщик выключен</div>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <input type="text" id="newLessonName" placeholder="Название пары">
+                <input type="text" id="newLessonEventId" placeholder="ID">
+                <input type="time" id="newLessonTime">
+                <input type="number" id="newLessonDuration" value="90" placeholder="Мин">
+            </div>
+            <button class="btn-primary" onclick="addLesson()" style="width: 100%; margin-bottom: 15px;">Добавить пару</button>
+            
+            <div id="scheduleList" style="margin-bottom: 15px;"></div>
+            
+            <div class="button-group">
+                <button class="btn-primary" id="schedulerStartBtn" onclick="startScheduler()">Включить планировщик</button>
+                <button class="btn-danger" id="schedulerStopBtn" onclick="stopScheduler()" disabled>Выключить планировщик</button>
+            </div>
         </div>
 
         <div class="section">
@@ -154,10 +181,114 @@
             .catch(err => alert('Ошибка: ' + err));
         }
 
+        function updateSchedule() {
+            fetch('/api/schedule')
+                .then(r => r.json())
+                .then(schedule => {
+                    const list = document.getElementById('scheduleList');
+                    if (schedule.length === 0) {
+                        list.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">Расписание пусто</div>';
+                        return;
+                    }
+                    list.innerHTML = schedule.map(lesson => `
+                        <div class="lesson-item ${lesson.enabled ? '' : 'disabled'}">
+                            <div class="lesson-info">
+                                <div class="lesson-name">${lesson.name}</div>
+                                <div class="lesson-details">ID: ${lesson.event_id} | Время: ${lesson.time} | ${lesson.duration} мин</div>
+                            </div>
+                            <div class="lesson-actions">
+                                <button class="btn-secondary" onclick="toggleLesson(${lesson.id})">${lesson.enabled ? 'Откл' : 'Вкл'}</button>
+                                <button class="btn-danger" onclick="deleteLesson(${lesson.id})">Удалить</button>
+                            </div>
+                        </div>
+                    `).join('');
+                })
+                .catch(err => console.error('Ошибка расписания:', err));
+        }
+
+        function addLesson() {
+            const name = document.getElementById('newLessonName').value.trim();
+            const eventId = document.getElementById('newLessonEventId').value.trim();
+            const time = document.getElementById('newLessonTime').value;
+            const duration = parseInt(document.getElementById('newLessonDuration').value);
+
+            if (!name || !eventId || !time) {
+                alert('Заполните все поля');
+                return;
+            }
+
+            fetch('/api/schedule', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, event_id: eventId, time, duration})
+            })
+            .then(r => r.json())
+            .then(() => {
+                document.getElementById('newLessonName').value = '';
+                document.getElementById('newLessonEventId').value = '';
+                document.getElementById('newLessonTime').value = '';
+                document.getElementById('newLessonDuration').value = '90';
+                updateSchedule();
+                updateLogs();
+            })
+            .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function deleteLesson(id) {
+            if (!confirm('Удалить эту пару?')) return;
+            fetch(`/api/schedule/${id}`, {method: 'DELETE'})
+                .then(() => { updateSchedule(); updateLogs(); })
+                .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function toggleLesson(id) {
+            fetch(`/api/schedule/${id}/toggle`, {method: 'POST'})
+                .then(() => { updateSchedule(); updateLogs(); })
+                .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function updateSchedulerStatus() {
+            fetch('/api/scheduler/status')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('schedulerStatus');
+                    const startBtn = document.getElementById('schedulerStartBtn');
+                    const stopBtn = document.getElementById('schedulerStopBtn');
+                    if (data.running) {
+                        badge.textContent = '● Планировщик работает';
+                        badge.classList.add('active');
+                        startBtn.disabled = true;
+                        stopBtn.disabled = false;
+                    } else {
+                        badge.textContent = '● Планировщик выключен';
+                        badge.classList.remove('active');
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                })
+                .catch(err => console.error('Ошибка статуса планировщика:', err));
+        }
+
+        function startScheduler() {
+            fetch('/api/scheduler/start', {method: 'POST'})
+                .then(() => { updateSchedulerStatus(); updateLogs(); })
+                .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function stopScheduler() {
+            fetch('/api/scheduler/stop', {method: 'POST'})
+                .then(() => { updateSchedulerStatus(); updateLogs(); })
+                .catch(err => alert('Ошибка: ' + err));
+        }
+
         setInterval(updateStatus, 2000);
         setInterval(updateLogs, 3000);
+        setInterval(updateSchedule, 5000);
+        setInterval(updateSchedulerStatus, 3000);
         updateStatus();
         updateLogs();
+        updateSchedule();
+        updateSchedulerStatus();
     </script>
 </body>
 </html>
