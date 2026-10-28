@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSU Bot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { color: #38BDF8; margin-bottom: 10px; }
+        .section { background: #222; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        h2 { font-size: 16px; margin-bottom: 15px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #aaa; font-size: 12px; }
+        input { width: 100%; padding: 10px; background: #111; border: 1px solid #333; color: #fff; border-radius: 4px; }
+        input:focus { outline: none; border-color: #38BDF8; }
+        .button-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-primary { background: #38BDF8; color: #000; }
+        .btn-primary:hover { background: #0EA5E9; }
+        .btn-danger { background: #EF4444; color: #fff; }
+        .btn-danger:hover { background: #DC2626; }
+        .btn-secondary { background: #475569; color: #fff; flex: 0; }
+        .btn-secondary:hover { background: #64748B; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status { padding: 10px; background: #111; border-radius: 4px; margin-bottom: 15px; border-left: 3px solid #666; }
+        .status.active { border-left-color: #22D3EE; color: #22D3EE; }
+        #logs { background: #111; border: 1px solid #333; border-radius: 4px; padding: 15px; height: 250px; overflow-y: auto; font-family: monospace; font-size: 12px; color: #aaa; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Бот для входа на лекции</h1>
+        
+        <div class="section">
+            <h2>Запуск</h2>
+            <div class="status" id="botStatus">● Бот остановлен</div>
+            
+            <div class="input-group">
+                <label>ID мероприятия</label>
+                <input type="text" id="eventId" placeholder="Введите ID">
+            </div>
+            
+            <div class="input-group">
+                <label>Длительность (минуты)</label>
+                <input type="number" id="duration" value="90">
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-primary" id="startBtn" onclick="startBot()">Запустить</button>
+                <button class="btn-danger" id="stopBtn" onclick="stopBot()" disabled>Остановить</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Настройки</h2>
+            <div class="input-group">
+                <label>ФИО</label>
+                <input type="text" id="fio" value="{{ config.user_fio }}">
+            </div>
+            <button class="btn-primary" onclick="saveFIO()">Сохранить</button>
+        </div>
+
+        <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Логи</h2>
+                <button class="btn-secondary" onclick="clearLogs()">Очистить</button>
+            </div>
+            <div id="logs">Загрузка логов...</div>
+        </div>
+    </div>
+
+    <script>
+        let config = {{ config | tojson }};
+
+        function updateStatus() {
+            fetch('/api/bot/status')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('botStatus');
+                    const startBtn = document.getElementById('startBtn');
+                    const stopBtn = document.getElementById('stopBtn');
+                    if (data.running) {
+                        badge.textContent = '● Бот работает';
+                        badge.classList.add('active');
+                        startBtn.disabled = true;
+                        stopBtn.disabled = false;
+                    } else {
+                        badge.textContent = '● Бот остановлен';
+                        badge.classList.remove('active');
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                })
+                .catch(err => console.error('Ошибка статуса:', err));
+        }
+
+        function updateLogs() {
+            fetch('/api/logs')
+                .then(r => r.text())
+                .then(text => {
+                    const logsDiv = document.getElementById('logs');
+                    logsDiv.textContent = text || 'Нет логов';
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                })
+                .catch(err => console.error('Ошибка логов:', err));
+        }
+
+        function startBot() {
+            const eventId = document.getElementById('eventId').value.trim();
+            const fio = document.getElementById('fio').value.trim();
+            const duration = parseInt(document.getElementById('duration').value);
+
+            if (!eventId) { alert('Введите ID мероприятия'); return; }
+            if (!fio || fio === 'Ваше Полное ФИО') { alert('Введите ФИО'); return; }
+
+            fetch('/api/bot/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({event_id: eventId, fio: fio, duration: duration})
+            })
+            .then(r => r.json())
+            .then(data => {
+                updateStatus();
+                updateLogs();
+            })
+            .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function stopBot() {
+            fetch('/api/bot/stop', {method: 'POST'})
+            .then(r => r.json())
+            .then(() => { updateStatus(); updateLogs(); })
+            .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function saveFIO() {
+            const fio = document.getElementById('fio').value.trim();
+            config.user_fio = fio;
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            })
+            .then(r => r.json())
+            .then(() => { alert('Сохранено'); updateLogs(); })
+            .catch(err => alert('Ошибка: ' + err));
+        }
+
+        function clearLogs() {
+            fetch('/api/logs/clear', {method: 'POST'})
+            .then(() => updateLogs())
+            .catch(err => alert('Ошибка: ' + err));
+        }
+
+        setInterval(updateStatus, 2000);
+        setInterval(updateLogs, 3000);
+        updateStatus();
+        updateLogs();
+    </script>
+</body>
+</html>

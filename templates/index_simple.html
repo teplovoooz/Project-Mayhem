@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSU Assistant Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0B0E14;
+            color: #F8FAFC;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: #38BDF8;
+        }
+        .subtitle {
+            color: #94A3B8;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: #111827;
+            border: 1px solid #1E293B;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .card h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: #F8FAFC;
+        }
+        .status-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1E293B;
+            border: 1px solid #334155;
+            flex: 1;
+        }
+        .status-badge.active {
+            background: rgba(34, 211, 238, 0.1);
+            border-color: #22D3EE;
+            color: #22D3EE;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #CBD5E1;
+            font-size: 0.875rem;
+        }
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0B0E14;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #F8FAFC;
+            font-size: 1rem;
+        }
+        input:focus {
+            outline: none;
+            border-color: #38BDF8;
+        }
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #38BDF8;
+            color: #0B0E14;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: #22D3EE;
+        }
+        .btn-danger {
+            background: #EF4444;
+            color: #F8FAFC;
+        }
+        .btn-danger:hover {
+            background: #DC2626;
+        }
+        .btn-secondary {
+            background: #334155;
+            color: #F8FAFC;
+        }
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+        }
+        #logs {
+            background: #0B0E14;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #94A3B8;
+        }
+        .loading {
+            color: #64748B;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Автоматизация входа на лекции</h1>
+        <p class="subtitle">Простой запуск бота для входа в мероприятия</p>
+
+        <div class="card">
+            <h2>Быстрый запуск</h2>
+            <div class="status-row">
+                <div class="status-badge" id="botStatus">● Бот остановлен</div>
+            </div>
+            <div class="form-group">
+                <label>ID мероприятия</label>
+                <input type="text" id="eventId" placeholder="Введите ID мероприятия">
+            </div>
+            <div class="form-group">
+                <label>Длительность (минуты)</label>
+                <input type="number" id="duration" value="90">
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" id="startBtn" onclick="startBot()">Запустить</button>
+                <button class="btn btn-danger" id="stopBtn" onclick="stopBot()" disabled>Остановить</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Настройки</h2>
+            <div class="form-group">
+                <label>ФИО (Фамилия Имя Отчество)</label>
+                <input type="text" id="fio" value="{{ config.user_fio }}">
+            </div>
+            <div class="form-group">
+                <label>Длительность по умолчанию (минуты)</label>
+                <input type="number" id="defaultDuration" value="{{ config.default_duration_minutes }}">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">Сохранить настройки</button>
+        </div>
+
+        <div class="card">
+            <h2>Логи</h2>
+            <div id="logs" class="loading">Логи загружаются...</div>
+            <button class="btn btn-secondary" onclick="clearLogs()" style="margin-top: 1rem;">Очистить логи</button>
+        </div>
+    </div>
+
+    <script>
+        let config = {{ config | tojson }};
+
+        function updateStatus() {
+            fetch('/api/bot/status')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('botStatus');
+                    const startBtn = document.getElementById('startBtn');
+                    const stopBtn = document.getElementById('stopBtn');
+                    if (data.running) {
+                        badge.textContent = '● Бот работает';
+                        badge.classList.add('active');
+                        startBtn.disabled = true;
+                        stopBtn.disabled = false;
+                    } else {
+                        badge.textContent = '● Бот остановлен';
+                        badge.classList.remove('active');
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                });
+        }
+
+        function updateLogs() {
+            fetch('/api/logs')
+                .then(r => r.text())
+                .then(text => {
+                    const logsDiv = document.getElementById('logs');
+                    logsDiv.textContent = text || 'Нет логов';
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                });
+        }
+
+        function startBot() {
+            const eventId = document.getElementById('eventId').value.trim();
+            const fio = document.getElementById('fio').value.trim();
+            const duration = parseInt(document.getElementById('duration').value);
+
+            if (!eventId) {
+                alert('Введите ID мероприятия');
+                return;
+            }
+            if (!fio || fio === 'Ваше Полное ФИО') {
+                alert('Введите ваше ФИО в настройках');
+                return;
+            }
+
+            fetch('/api/bot/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({event_id: eventId, fio: fio, duration: duration})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    updateStatus();
+                    updateLogs();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
+        function stopBot() {
+            fetch('/api/bot/stop', {method: 'POST'})
+            .then(r => r.json())
+            .then(() => {
+                updateStatus();
+                updateLogs();
+            });
+        }
+
+        function saveSettings() {
+            const fio = document.getElementById('fio').value.trim();
+            const defaultDuration = parseInt(document.getElementById('defaultDuration').value);
+
+            config.user_fio = fio;
+            config.default_duration_minutes = defaultDuration;
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            })
+            .then(r => r.json())
+            .then(() => {
+                alert('Настройки сохранены');
+                document.getElementById('duration').value = defaultDuration;
+                updateLogs();
+            });
+        }
+
+        function clearLogs() {
+            fetch('/api/logs/clear', {method: 'POST'})
+            .then(() => updateLogs());
+        }
+
+        setInterval(updateStatus, 2000);
+        setInterval(updateLogs, 3000);
+        updateStatus();
+        updateLogs();
+    </script>
+</body>
+</html>
