@@ -52,6 +52,7 @@ def run_bot(event_id, fio, duration):
         active_bot.start_driver()
         active_bot.login(event_id, fio)
         log_message(f"✓ Успешный вход в мероприятие")
+        active_bot.greet_in_chat()
         active_bot.stay_in_lecture(duration)
         log_message(f"✓ Сеанс завершен")
     except Exception as e:

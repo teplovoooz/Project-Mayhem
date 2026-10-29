@@ -19,11 +19,33 @@ class TSUAssistantBot:
         self.base_url = "https://e-class.tsu.ru/#login_by_id"
     
     def start_driver(self):
-        """Инициализация веб-драйвера"""
+        """Инициализация веб-драйвера с расширением Mind for Firefox"""
         options = webdriver.FirefoxOptions()
         options.add_argument("--disable-logging")
         options.set_preference("browser.cache.disk.enable", False)
         options.set_preference("browser.cache.memory.enable", False)
+        
+        # Читаем путь к профилю из config.json
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        firefox_profile_path = None
+        
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    firefox_profile_path = config.get('firefox_profile_path')
+            except:
+                pass
+        
+        # Если путь к профилю указан, используем его
+        if firefox_profile_path and os.path.exists(firefox_profile_path):
+            options.add_argument('-profile')
+            options.add_argument(firefox_profile_path)
+            print(f"✓ Используется профиль Firefox с расширением Mind")
+        else:
+            print("⚠ Профиль Firefox не указан в config.json")
+            print("   Расширение 'Mind for Firefox' может быть недоступно")
+        
         try:
             driver_path = GeckoDriverManager().install()
             service = Service(driver_path)
@@ -345,14 +367,115 @@ class TSUAssistantBot:
             print(f"Ошибка при входе в аудиторию: {e}")
             raise
     
+    def send_chat_message(self, message: str):
+        """Отправка сообщения в чат"""
+        try:
+            print(f"\n▶ Отправляю сообщение в чат: '{message}'")
+            
+            # Находим iframe чата
+            chat_iframe = self.driver.find_element(
+                By.CSS_SELECTOR, "iframe.emptyText.external-chat-emptyText[imarker='enterMessageArea']"
+            )
+            
+            # Используем JavaScript для установки текста в iframe
+            js_script = """
+            var iframe = arguments[0];
+            var message = arguments[1];
+            var doc = iframe.contentDocument || iframe.contentWindow.document;
+            var body = doc.body;
+            body.innerHTML = message;
+            body.textContent = message;
+            
+            // Триггерим события для активации кнопки отправки
+            var inputEvent = new Event('input', { bubbles: true });
+            body.dispatchEvent(inputEvent);
+            
+            var changeEvent = new Event('change', { bubbles: true });
+            body.dispatchEvent(changeEvent);
+            
+            var keyupEvent = new Event('keyup', { bubbles: true });
+            body.dispatchEvent(keyupEvent);
+            """
+            
+            self.driver.execute_script(js_script, chat_iframe, message)
+            print("✓ Текст установлен в поле чата")
+            
+            time.sleep(1)
+            
+            # Ищем кнопку отправки
+            send_button = None
+            
+            try:
+                all_buttons = self.driver.find_elements(By.CSS_SELECTOR, "div.gray-decorated-button")
+                for btn in all_buttons:
+                    try:
+                        btn_title = btn.get_attribute("title")
+                        btn_marker = btn.get_attribute("imarker")
+                        if btn_title == "Отправить" or btn_marker == "sendMessageButton":
+                            send_button = btn
+                            break
+                    except:
+                        pass
+            except:
+                pass
+            
+            if not send_button:
+                try:
+                    send_button = self.driver.find_element(By.CSS_SELECTOR, "div[imarker='sendMessageButton']")
+                except:
+                    pass
+            
+            if send_button:
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", send_button)
+                time.sleep(0.3)
+                try:
+                    send_button.click()
+                except:
+                    self.driver.execute_script("arguments[0].click();", send_button)
+                print(f"✓ Сообщение '{message}' отправлено!")
+                return True
+            else:
+                print("✗ Кнопка отправки не найдена")
+                return False
+                
+        except Exception as e:
+            print(f"⚠ Ошибка при отправке сообщения: {e}")
+            return False
+    
+    def greet_in_chat(self):
+        """Отправка приветствия в чат"""
+        try:
+            print("\n▶ Отправляю приветствие в чат...")
+            time.sleep(3)
+            self.send_chat_message("Здравствуйте")
+        except Exception as e:
+            print(f"⚠ Ошибка при отправке приветствия: {e}")
+    
+    def farewell_in_chat(self):
+        """Отправка прощания в чат"""
+        try:
+            print("\n▶ Отправляю прощание в чат...")
+            self.send_chat_message("До свидания")
+        except Exception as e:
+            print(f"⚠ Ошибка при отправке прощания: {e}")
+    
     def stay_in_lecture(self, duration_minutes: int = 5):
         """Остаёмся в аудитории указанное время"""
         try:
             print(f"Бот находится в аудитории {duration_minutes} минут...")
             end_time = time.time() + (duration_minutes * 60)
+            farewell_time = end_time - 60  # За минуту до конца
+            farewell_sent = False
+            
             while time.time() < end_time:
                 remaining = int((end_time - time.time()) / 60)
                 print(f"Осталось {remaining} минут", end='\r')
+                
+                # Отправляем прощание за минуту до конца
+                if not farewell_sent and time.time() >= farewell_time:
+                    self.farewell_in_chat()
+                    farewell_sent = True
+                
                 time.sleep(10)
         except KeyboardInterrupt:
             print("\nПолучен сигнал выхода")
@@ -418,6 +541,9 @@ def main():
         
         print("\nВход в мероприятие выполнен!")
         time.sleep(2)
+        
+        # Автоматическое приветствие в чате
+        bot.greet_in_chat()
         
         # Получение времени пребывания
         default_duration = 90
