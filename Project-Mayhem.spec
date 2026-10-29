@@ -9,6 +9,8 @@ a = Analysis(
     datas=[
         ('config.json', '.'),
         ('schedule.json', '.'),
+        ('icon.png', '.'),
+        ('icon.ico', '.'),
     ],
     hiddenimports=['selenium', 'webdriver_manager', 'schedule'],
     hookspath=[],
@@ -43,5 +45,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='icon.ico',
 )

@@ -75,6 +75,10 @@ class ProjectMayhemGUI(QMainWindow):
         self.setWindowTitle("Project Mayhem - Бот для входа на лекции ТГУ")
         self.setGeometry(100, 100, 900, 700)
         
+        # Устанавливаем иконку
+        if os.path.exists("icon.png"):
+            self.setWindowIcon(QIcon("icon.png"))
+        
         # Темная тема
         self.set_dark_theme()
         
@@ -508,6 +512,11 @@ class ProjectMayhemGUI(QMainWindow):
     def create_tray_icon(self):
         """Создание иконки в системном трее"""
         self.tray_icon = QSystemTrayIcon(self)
+        
+        # Устанавливаем иконку для трея
+        if os.path.exists("icon.png"):
+            self.tray_icon.setIcon(QIcon("icon.png"))
+        
         self.tray_icon.setToolTip("Project Mayhem")
         
         # Создаём меню трея
