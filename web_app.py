@@ -57,8 +57,6 @@ def run_bot(event_id, fio, duration):
     except Exception as e:
         log_message(f"✗ Ошибка: {e}")
     finally:
-        if active_bot:
-            active_bot.close()
         active_bot = None
 
 def scheduler_worker():
