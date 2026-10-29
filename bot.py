@@ -22,8 +22,7 @@ class TSUAssistantBot:
         self.last_farewell_text = None  # Текст для прощаний
         self.last_greet_index = -1  # Индекс для приветствий
         self.last_farewell_index = -1  # Индекс для прощаний
-        self.should_stop = False  # Флаг для остановки цикла
-        self.base_url = "https://e-class.tsu.ru/#login_by_id"
+        self.should_stop = False  # Флаг для остановки цикла        self.send_button_cache = None  # Кэш кнопки отправки        self.base_url = "https://e-class.tsu.ru/#login_by_id"
     
     def start_driver(self):
         """Инициализация веб-драйвера с расширением Mind for Firefox"""
@@ -407,30 +406,37 @@ class TSUAssistantBot:
             self.driver.execute_script(js_script, chat_iframe, message)
             print("✓ Текст установлен в поле чата")
             
-            time.sleep(1)
+            time.sleep(0.5)
             
-            # Ищем кнопку отправки
-            send_button = None
+            # Используем кэшированную кнопку или ищем новую
+            send_button = self.send_button_cache
             
-            try:
-                all_buttons = self.driver.find_elements(By.CSS_SELECTOR, "div.gray-decorated-button")
-                for btn in all_buttons:
-                    try:
-                        btn_title = btn.get_attribute("title")
-                        btn_marker = btn.get_attribute("imarker")
-                        if btn_title == "Отправить" or btn_marker == "sendMessageButton":
-                            send_button = btn
-                            break
-                    except:
-                        pass
-            except:
-                pass
+            # Проверяем валидность кэша
+            if send_button:
+                try:
+                    send_button.is_displayed()
+                except:
+                    send_button = None
+                    self.send_button_cache = None
             
+            # Если кэш недействителен, ищем кнопку заново
             if not send_button:
                 try:
                     send_button = self.driver.find_element(By.CSS_SELECTOR, "div[imarker='sendMessageButton']")
+                    self.send_button_cache = send_button
                 except:
-                    pass
+                    try:
+                        all_buttons = self.driver.find_elements(By.CSS_SELECTOR, "div.gray-decorated-button")
+                        for btn in all_buttons:
+                            try:
+                                if btn.get_attribute("title") == "Отправить":
+                                    send_button = btn
+                                    self.send_button_cache = btn
+                                    break
+                            except:
+                                pass
+                    except:
+                        pass
             
             if send_button:
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", send_button)

@@ -153,6 +153,41 @@ class ProjectMayhemGUI(QMainWindow):
             QListWidget::item {
                 color: #ffffff;
             }
+            QMessageBox {
+                background: #1a1a1a;
+            }
+            QMessageBox QLabel {
+                color: #ffffff;
+            }
+            QMessageBox QPushButton {
+                background: #222;
+                color: #ffffff;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 6px 12px;
+            }
+            QMessageBox QPushButton:hover {
+                background: #333;
+            }
+            QFileDialog {
+                background: #1a1a1a;
+                color: #000000;
+            }
+            QFileDialog QLabel {
+                color: #000000;
+            }
+            QFileDialog QLineEdit {
+                color: #000000;
+                background: #ffffff;
+            }
+            QFileDialog QListView {
+                color: #000000;
+                background: #ffffff;
+            }
+            QFileDialog QPushButton {
+                color: #000000;
+                background: #f0f0f0;
+            }
         """)
         
     def create_bot_section(self):

@@ -9,8 +9,6 @@ a = Analysis(
     datas=[
         ('config.json', '.'),
         ('schedule.json', '.'),
-        ('icon.png', '.'),
-        ('icon.ico', '.'),
     ],
     hiddenimports=['selenium', 'webdriver_manager', 'schedule'],
     hookspath=[],
