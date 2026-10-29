@@ -60,7 +60,7 @@ class TSUAssistantBot:
             
             # Закрываем модальное окно с разрешениями
             print("▶ Закрываю модальное окно разрешений...")
-            time.sleep(3)
+            time.sleep(1.5)
             
             # Пробуем нажать кнопку "Блокировать"
             try:
@@ -68,7 +68,6 @@ class TSUAssistantBot:
                 if block_buttons and block_buttons[0].is_displayed():
                     block_buttons[0].click()
                     print("✓ Нажата кнопка 'Блокировать' (уведомления запрещены)")
-                    time.sleep(2)
             except Exception as e:
                 print(f"⚠ Не удалось нажать 'Блокировать': {e}")
             
@@ -79,7 +78,6 @@ class TSUAssistantBot:
                     if btn.is_displayed():
                         btn.click()
                         print("✓ Закрыто модальное окно")
-                        time.sleep(1)
                         break
             except:
                 pass
@@ -93,8 +91,6 @@ class TSUAssistantBot:
                 print("✓ Поля появились на странице")
             except TimeoutException:
                 print("⚠ Timeout при ожидании полей, пробую продолжить...")
-            
-            time.sleep(2)
             
             # Логируем, что найдено на странице
             all_inputs = self.driver.find_elements(By.TAG_NAME, "input")
@@ -119,9 +115,7 @@ class TSUAssistantBot:
                 try:
                     print("\n▶ Заполняю поле ID мероприятия...")
                     self.driver.execute_script("arguments[0].scrollIntoView(true);", text_inputs[0])
-                    time.sleep(0.5)
                     text_inputs[0].click()
-                    time.sleep(0.5)
                     text_inputs[0].clear()
                     # Используем identifier как ID мероприятия
                     text_inputs[0].send_keys(identifier)
@@ -129,13 +123,10 @@ class TSUAssistantBot:
                 except Exception as e:
                     print(f"✗ Ошибка при заполнении поля: {e}")
                 
-                time.sleep(2)
+                time.sleep(1)
                 
                 # Ищем и нажимаем кнопку "Продолжить"
                 print("▶ Ищу кнопку 'Продолжить'...")
-                
-                # Ждём появления кнопки (она может появиться после ввода)
-                time.sleep(2)
                 
                 # Ищем кнопку "Продолжить" в div.mind-button-text
                 button = None
@@ -167,14 +158,13 @@ class TSUAssistantBot:
                     try:
                         print(f"▶ Нажимаю кнопку 'Продолжить'...")
                         self.driver.execute_script("arguments[0].scrollIntoView(true);", button)
-                        time.sleep(0.5)
                         button.click()
                         print("✓ Кнопка нажата")
-                        time.sleep(5)
+                        time.sleep(2)
                         
                         # Теперь ждём появления поля для ввода ФИО
                         print("\n▶ Ожидание поля ввода ФИО...")
-                        time.sleep(3)
+                        time.sleep(1.5)
                         
                         # Ищем поле для ФИО - оно находится внутри структуры с imarker="guestName"
                         fio_field = None
