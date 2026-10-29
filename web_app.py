@@ -52,7 +52,7 @@ def run_bot(event_id, fio, duration):
         active_bot.start_driver()
         active_bot.login(event_id, fio)
         log_message(f"✓ Успешный вход в мероприятие")
-        active_bot.greet_in_chat()
+        # greet_in_chat() вызывается автоматически в stay_in_lecture при появлении новых сообщений
         active_bot.stay_in_lecture(duration)
         log_message(f"✓ Сеанс завершен")
     except Exception as e:
@@ -125,10 +125,16 @@ def stop_bot():
     global active_bot
     if active_bot:
         try:
-            active_bot.close()
+            # Устанавливаем флаг остановки, чтобы бот корректно завершился
+            active_bot.should_stop = True
+            log_message("⚠ Сигнал остановки отправлен боту...")
+            time.sleep(2)  # Даём время на корректный выход
+            # Если бот всё ещё активен, принудительно закрываем
+            if active_bot:
+                active_bot.close()
             log_message("✓ Бот остановлен пользователем")
-        except:
-            pass
+        except Exception as e:
+            log_message(f"✗ Ошибка при остановке: {e}")
         active_bot = None
         return jsonify({"status": "ok", "message": "Бот остановлен"})
     return jsonify({"status": "error", "message": "Бот не запущен"}), 400

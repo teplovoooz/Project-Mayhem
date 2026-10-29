@@ -16,6 +16,11 @@ from datetime import datetime
 class TSUAssistantBot:
     def __init__(self):
         self.driver = None
+        self.greeted = False  # Флаг отправки приветствия
+        self.farewelled = False  # Флаг отправки прощания
+        self.last_message_text = None  # Текст последнего сообщения (вместо счётчика)
+        self.last_message_index = -1  # Индекс последнего обработанного сообщения
+        self.should_stop = False  # Флаг для остановки цикла
         self.base_url = "https://e-class.tsu.ru/#login_by_id"
     
     def start_driver(self):
@@ -443,38 +448,167 @@ class TSUAssistantBot:
             return False
     
     def greet_in_chat(self):
-        """Отправка приветствия в чат"""
+        """Отправка приветствия в чат если видны новые сообщения"""
         try:
-            print("\n▶ Отправляю приветствие в чат...")
-            time.sleep(3)
-            self.send_chat_message("Здравствуйте")
+            if self.greeted:
+                return
+            
+            try:
+                messages = self.driver.find_elements(By.CSS_SELECTOR, "span.external-chatMessage[imarker='messageContent']")
+                
+                if not messages:
+                    print(f"    ⚠ Чат пуст")
+                    return
+                
+                current_index = len(messages) - 1
+                current_last = messages[-1].text.strip()
+                
+                print(f"    Индекс: {current_index} (было: {self.last_message_index}), текст: '{current_last[:50]}'")
+                
+                # Проверяем: изменился индекс ИЛИ текст
+                if current_index > self.last_message_index or current_last != self.last_message_text:
+                    print(f"    ✓ Новое сообщение обнаружено!")
+                    self.last_message_index = current_index
+                    self.last_message_text = current_last
+                    
+                    print("    ▶ Отправляю приветствие...")
+                    if self.send_chat_message("Здравствуйте"):
+                        self.greeted = True
+                else:
+                    print(f"    ⚠ Новых сообщений нет")
+                    
+            except Exception as e:
+                print(f"    ⚠ Ошибка при проверке чата: {e}")
+                
         except Exception as e:
-            print(f"⚠ Ошибка при отправке приветствия: {e}")
+            print(f"    ⚠ Ошибка при отправке приветствия: {e}")
+    
+    def check_farewell_messages(self):
+        """Проверка наличия прощальных сообщений в новых сообщениях"""
+        try:
+            farewell_words = [
+                'до свидания', 'досвидания', 'пока', 'до встречи',
+                'доброго вечера', 'спокойной ночи', 'всем пока',
+                'до завтра', 'удачи', 'bye', 'goodbye'
+            ]
+            
+            messages = self.driver.find_elements(By.CSS_SELECTOR, "span.external-chatMessage[imarker='messageContent']")
+            
+            if not messages:
+                return False
+            
+            current_index = len(messages) - 1
+            
+            # Проверяем только если индекс больше последнего обработанного
+            if current_index > self.last_message_index:
+                print(f"✓ Новые сообщения обнаружены (индекс: {self.last_message_index} -> {current_index})")
+                
+                # Проверяем только новые сообщения (с последнего индекса до текущего)
+                new_messages = messages[self.last_message_index + 1:]
+                
+                for msg in new_messages:
+                    text = msg.text.lower().strip()
+                    for word in farewell_words:
+                        if word in text:
+                            print(f"✓ Обнаружено прощальное сообщение: '{msg.text}'")
+                            self.last_message_index = current_index
+                            self.last_message_text = messages[-1].text.strip()
+                            return True
+                
+                # Обновляем индекс и текст
+                self.last_message_index = current_index
+                self.last_message_text = messages[-1].text.strip()
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠ Ошибка при проверке прощальных сообщений: {e}")
+            return False
     
     def farewell_in_chat(self):
-        """Отправка прощания в чат"""
+        """Отправка прощания в чат при обнаружении прощальных сообщений"""
         try:
-            print("\n▶ Отправляю прощание в чат...")
-            self.send_chat_message("До свидания")
+            # Если уже прощались, пропускаем
+            if self.farewelled:
+                return False
+            
+            print("\n▶ Проверяю прощальные сообщения в чате...")
+            
+            # Проверяем наличие прощальных сообщений
+            if self.check_farewell_messages():
+                print("▶ Отправляю прощание...")
+                if self.send_chat_message("До свидания"):
+                    self.farewelled = True
+                    return True
+            else:
+                print("⚠ Прощальных сообщений не найдено")
+                return False
+                
         except Exception as e:
             print(f"⚠ Ошибка при отправке прощания: {e}")
+            return False
     
     def stay_in_lecture(self, duration_minutes: int = 5):
-        """Остаёмся в аудитории указанное время"""
+        """Остаёмся в аудитории и отслеживаем прощания"""
         try:
             print(f"Бот находится в аудитории {duration_minutes} минут...")
+            
+            # Инициализируем запоминание последнего сообщения
+            print("▶ Запоминаю текущее состояние чата...")
+            time.sleep(2)
+            messages = self.driver.find_elements(By.CSS_SELECTOR, "span.external-chatMessage[imarker='messageContent']")
+            if messages:
+                self.last_message_index = len(messages) - 1  # Запоминаем индекс последнего
+                self.last_message_text = messages[-1].text.strip()
+                print(f"✓ В чате {len(messages)} сообщений, последнее: '{self.last_message_text[:50]}...'")
+            else:
+                self.last_message_index = -1
+                print("✓ Чат пуст, жду первого сообщения")
+            
             end_time = time.time() + (duration_minutes * 60)
-            farewell_time = end_time - 60  # За минуту до конца
-            farewell_sent = False
+            check_interval = 10  # Проверяем и приветствия, и прощания каждые 10 секунд
+            last_check = 0
             
             while time.time() < end_time:
+                # Проверяем флаг остановки
+                if self.should_stop:
+                    print("\n⚠ Получен сигнал остановки, выхожу из аудитории...")
+                    self.exit_lecture()
+                    time.sleep(1)
+                    self.close()
+                    break
+                
                 remaining = int((end_time - time.time()) / 60)
                 print(f"Осталось {remaining} минут", end='\r')
                 
-                # Отправляем прощание за минуту до конца
-                if not farewell_sent and time.time() >= farewell_time:
-                    self.farewell_in_chat()
-                    farewell_sent = True
+                current_time = time.time()
+                
+                # Проверяем оба события каждые 10 секунд
+                if current_time - last_check >= check_interval:
+                    print("\n▶ Проверка чата...")
+                    
+                    # Проверяем приветствия
+                    if not self.greeted:
+                        print("  → Проверяю новые сообщения для приветствия...")
+                        self.greet_in_chat()
+                    else:
+                        print("  → Приветствие уже отправлено, пропускаю")
+                    
+                    # Проверяем прощания
+                    print("  → Проверяю прощальные сообщения...")
+                    if self.farewell_in_chat():
+                        print("\n✓ Прощание отправлено")
+                        time.sleep(1)
+                        
+                        # Выход из аудитории
+                        self.exit_lecture()
+                        
+                        time.sleep(2)
+                        # Закрываем браузер
+                        self.close()
+                        break
+                    
+                    last_check = current_time
                 
                 time.sleep(10)
         except KeyboardInterrupt:
@@ -483,27 +617,52 @@ class TSUAssistantBot:
     def exit_lecture(self):
         """Выход из аудитории"""
         try:
-            wait = WebDriverWait(self.driver, 10)
+            print("\n▶ Ищу кнопку выхода...")
             
-            # Поиск кнопки выхода
-            exit_button = wait.until(
-                EC.element_to_be_clickable((By.ID, "exit_button"))
-            )
-            exit_button.click()
-            print("Выход из аудитории выполнен")
+            # Ищем кнопку выхода - она содержит текст "Выйти"
+            exit_button = None
             
-        except TimeoutException:
-            print("Ошибка: кнопка выхода не найдена")
-            raise
+            try:
+                # Вариант 1: по тексту "Выйти"
+                exit_button = self.driver.find_element(By.XPATH, 
+                    "//*[contains(text(), 'Выйти')]")
+                print("✓ Найдена кнопка выхода")
+            except:
+                pass
+            
+            if not exit_button:
+                try:
+                    # Вариант 2: по классу GBDGNBYOVE содержащему текст "Выйти"
+                    exit_button = self.driver.find_element(By.XPATH, 
+                        "//div[contains(@class, 'GBDGNBYOVE')]/ancestor::div[contains(@class, 'gray-decorated-button')]")
+                    print("✓ Найдена кнопка выхода (вариант 2)")
+                except:
+                    pass
+            
+            if exit_button:
+                print("▶ Нажимаю кнопку выхода...")
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", exit_button)
+                time.sleep(0.5)
+                try:
+                    exit_button.click()
+                except:
+                    self.driver.execute_script("arguments[0].click();", exit_button)
+                print("✓ Выход из аудитории выполнен")
+                time.sleep(2)
+                return True
+            else:
+                print("✗ Кнопка выхода не найдена")
+                return False
+                
         except Exception as e:
-            print(f"Ошибка при выходе: {e}")
-            raise
+            print(f"⚠ Ошибка при выходе из аудитории: {e}")
+            return False
     
     def close(self):
         """Закрытие браузера"""
         if self.driver:
             self.driver.quit()
-            print("Браузер закрыт")
+            print("✓ Браузер закрыт")
 
 
 def main():
@@ -542,8 +701,7 @@ def main():
         print("\nВход в мероприятие выполнен!")
         time.sleep(2)
         
-        # Автоматическое приветствие в чате
-        bot.greet_in_chat()
+        # greet_in_chat() вызывается автоматически в stay_in_lecture при появлении новых сообщений
         
         # Получение времени пребывания
         default_duration = 90
