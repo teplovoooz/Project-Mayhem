@@ -4,7 +4,6 @@ Project Mayhem - Desktop GUI для бота входа на лекции ТГУ
 """
 
 import sys
-import os
 import json
 import threading
 import time
@@ -15,7 +14,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTableWidgetItem, QHeaderView, QCheckBox, QTimeEdit,
                              QMessageBox)
 from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
-from PyQt6.QtGui import QFont, QPalette, QColor, QIcon, QAction
+from PyQt6.QtGui import QFont, QPalette, QColor
 from bot import TSUAssistantBot
 import schedule
 
@@ -69,12 +68,8 @@ class ProjectMayhemGUI(QMainWindow):
     
     def init_ui(self):
         """Инициализация интерфейса"""
-        self.setWindowTitle("Проект Разгром - Бот для входа на лекции ТГУ")
+        self.setWindowTitle("Project Mayhem - Бот для входа на лекции ТГУ")
         self.setGeometry(100, 100, 900, 700)
-        
-        # Устанавливаем иконку
-        if os.path.exists("icon.png"):
-            self.setWindowIcon(QIcon("icon.png"))
         
         # Темная тема
         self.set_dark_theme()
@@ -152,41 +147,6 @@ class ProjectMayhemGUI(QMainWindow):
             }
             QListWidget::item {
                 color: #ffffff;
-            }
-            QMessageBox {
-                background: #1a1a1a;
-            }
-            QMessageBox QLabel {
-                color: #ffffff;
-            }
-            QMessageBox QPushButton {
-                background: #222;
-                color: #ffffff;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 6px 12px;
-            }
-            QMessageBox QPushButton:hover {
-                background: #333;
-            }
-            QFileDialog {
-                background: #1a1a1a;
-                color: #000000;
-            }
-            QFileDialog QLabel {
-                color: #000000;
-            }
-            QFileDialog QLineEdit {
-                color: #000000;
-                background: #ffffff;
-            }
-            QFileDialog QListView {
-                color: #000000;
-                background: #ffffff;
-            }
-            QFileDialog QPushButton {
-                color: #000000;
-                background: #f0f0f0;
             }
         """)
         
@@ -543,10 +503,19 @@ class ProjectMayhemGUI(QMainWindow):
     
     def closeEvent(self, event):
         """Обработка закрытия окна"""
-        if self.active_bot:
-            self.active_bot.should_stop = True
-        self.scheduler_running = False
-        event.accept()
+        if self.active_bot or self.scheduler_running:
+            reply = QMessageBox.question(self, "Подтверждение", 
+                                        "Бот или планировщик активны. Закрыть приложение?",
+                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                if self.active_bot:
+                    self.active_bot.should_stop = True
+                self.scheduler_running = False
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
 def main():
     app = QApplication(sys.argv)
