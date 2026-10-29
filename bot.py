@@ -624,6 +624,13 @@ class TSUAssistantBot:
                     last_check = current_time
                 
                 time.sleep(10)
+            
+            # Если цикл завершился по истечению времени (не по break)
+            print("\n⏱ Время истекло, выхожу из аудитории...")
+            self.exit_lecture()
+            time.sleep(1)
+            self.close()
+            
         except KeyboardInterrupt:
             print("\nПолучен сигнал выхода")
     

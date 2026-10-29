@@ -42,10 +42,7 @@ def log_message(message):
     log_entry = f"[{timestamp}] {message}\n"
     with open(LOGS_PATH, 'a', encoding='utf-8') as f:
         f.write(log_entry)
-    try:
-        print(log_entry, end='')
-    except UnicodeEncodeError:
-        print(log_entry.encode('utf-8', errors='replace').decode('cp1251', errors='replace'), end='')
+    print(log_entry, end='')
 
 def run_bot(event_id, fio, duration):
     global active_bot
