@@ -4,6 +4,7 @@ Project Mayhem - Desktop GUI для бота входа на лекции ТГУ
 """
 
 import sys
+import os
 import json
 import threading
 import time
@@ -12,7 +13,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QTextEdit, QSpinBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QCheckBox, QTimeEdit,
-                             QMessageBox, QSystemTrayIcon, QMenu)
+                             QMessageBox)
 from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QPalette, QColor, QIcon, QAction
 from bot import TSUAssistantBot
@@ -35,10 +36,6 @@ class ProjectMayhemGUI(QMainWindow):
         self.load_config()
         self.load_schedule()
         self.init_ui()
-        self.create_tray_icon()
-        
-        # Обработчик сигнала от трея
-        self.tray_icon.activated.connect(self.tray_icon_activated)
         
     def load_config(self):
         """Загрузка конфигурации"""
@@ -72,7 +69,7 @@ class ProjectMayhemGUI(QMainWindow):
     
     def init_ui(self):
         """Инициализация интерфейса"""
-        self.setWindowTitle("Project Mayhem - Бот для входа на лекции ТГУ")
+        self.setWindowTitle("Проект Разгром - Бот для входа на лекции ТГУ")
         self.setGeometry(100, 100, 900, 700)
         
         # Устанавливаем иконку
@@ -509,67 +506,12 @@ class ProjectMayhemGUI(QMainWindow):
         schedule.clear()
         self.log_message("✓ Планировщик остановлен")
     
-    def create_tray_icon(self):
-        """Создание иконки в системном трее"""
-        self.tray_icon = QSystemTrayIcon(self)
-        
-        # Устанавливаем иконку для трея
-        if os.path.exists("icon.png"):
-            self.tray_icon.setIcon(QIcon("icon.png"))
-        
-        self.tray_icon.setToolTip("Project Mayhem")
-        
-        # Создаём меню трея
-        tray_menu = QMenu()
-        show_action = QAction("Показать окно", self)
-        show_action.triggered.connect(self.show)
-        quit_action = QAction("Выход", self)
-        quit_action.triggered.connect(self.quit_application)
-        
-        tray_menu.addAction(show_action)
-        tray_menu.addSeparator()
-        tray_menu.addAction(quit_action)
-        
-        self.tray_icon.setContextMenu(tray_menu)
-        self.tray_icon.show()
-    
-    def tray_icon_activated(self, reason):
-        """Обработка клика по иконке трея"""
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self.show()
-            self.raise_()
-            self.activateWindow()
-    
-    def changeEvent(self, event):
-        """Обработка сворачивания окна"""
-        if event.type() == event.Type.WindowStateChange:
-            if self.isMinimized():
-                event.ignore()
-                self.hide()
-                self.tray_icon.showMessage(
-                    "Project Mayhem",
-                    "Приложение свёрнуто в трей. Двойной клик для восстановления.",
-                    QSystemTrayIcon.MessageIcon.Information,
-                    2000
-                )
-    
-    def quit_application(self):
-        """Полное закрытие приложения"""
+    def closeEvent(self, event):
+        """Обработка закрытия окна"""
         if self.active_bot:
             self.active_bot.should_stop = True
         self.scheduler_running = False
-        QApplication.quit()
-    
-    def closeEvent(self, event):
-        """Обработка закрытия окна - сворачивание в трей"""
-        event.ignore()
-        self.hide()
-        self.tray_icon.showMessage(
-            "Project Mayhem",
-            "Приложение свёрнуто в трей. Двойной клик для восстановления.",
-            QSystemTrayIcon.MessageIcon.Information,
-            2000
-        )
+        event.accept()
 
 def main():
     app = QApplication(sys.argv)
