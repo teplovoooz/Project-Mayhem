@@ -512,6 +512,14 @@ class ProjectMayhemGUI(QMainWindow):
             self.active_bot.should_stop = True
         self.scheduler_running = False
         event.accept()
+    
+    def changeEvent(self, event):
+        """Обработка событий окна - предотвращение минимизации"""
+        if event.type() == event.Type.WindowStateChange:
+            # Если окно минимизируется, просто игнорируем
+            if self.isMinimized():
+                event.ignore()
+                self.showNormal()  # Показываем окно в нормальном виде
 
 def main():
     app = QApplication(sys.argv)
