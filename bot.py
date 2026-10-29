@@ -18,8 +18,10 @@ class TSUAssistantBot:
         self.driver = None
         self.greeted = False  # Флаг отправки приветствия
         self.farewelled = False  # Флаг отправки прощания
-        self.last_message_text = None  # Текст последнего сообщения (вместо счётчика)
-        self.last_message_index = -1  # Индекс последнего обработанного сообщения
+        self.last_greet_text = None  # Текст для приветствий
+        self.last_farewell_text = None  # Текст для прощаний
+        self.last_greet_index = -1  # Индекс для приветствий
+        self.last_farewell_index = -1  # Индекс для прощаний
         self.should_stop = False  # Флаг для остановки цикла
         self.base_url = "https://e-class.tsu.ru/#login_by_id"
     
@@ -463,13 +465,13 @@ class TSUAssistantBot:
                 current_index = len(messages) - 1
                 current_last = messages[-1].text.strip()
                 
-                print(f"    Индекс: {current_index} (было: {self.last_message_index}), текст: '{current_last[:50]}'")
+                print(f"    Индекс: {current_index} (было: {self.last_greet_index}), текст: '{current_last[:50]}'")
                 
                 # Проверяем: изменился индекс ИЛИ текст
-                if current_index > self.last_message_index or current_last != self.last_message_text:
+                if current_index > self.last_greet_index or current_last != self.last_greet_text:
                     print(f"    ✓ Новое сообщение обнаружено!")
-                    self.last_message_index = current_index
-                    self.last_message_text = current_last
+                    self.last_greet_index = current_index
+                    self.last_greet_text = current_last
                     
                     print("    ▶ Отправляю приветствие...")
                     if self.send_chat_message("Здравствуйте"):
@@ -484,7 +486,7 @@ class TSUAssistantBot:
             print(f"    ⚠ Ошибка при отправке приветствия: {e}")
     
     def check_farewell_messages(self):
-        """Проверка наличия прощальных сообщений в новых сообщениях"""
+        """Проверка наличия прощальных сообщений (аналогично приветствию)"""
         try:
             farewell_words = [
                 'до свидания', 'досвидания', 'пока', 'до встречи',
@@ -498,26 +500,28 @@ class TSUAssistantBot:
                 return False
             
             current_index = len(messages) - 1
+            current_last = messages[-1].text.strip().lower()
             
-            # Проверяем только если индекс больше последнего обработанного
-            if current_index > self.last_message_index:
-                print(f"✓ Новые сообщения обнаружены (индекс: {self.last_message_index} -> {current_index})")
+            print(f"    Индекс: {current_index} (было: {self.last_farewell_index}), текст: '{current_last[:50]}'")
+            
+            # Проверяем: изменился индекс ИЛИ текст (так же как в приветствии)
+            if current_index > self.last_farewell_index or current_last != self.last_farewell_text:
+                print(f"    ✓ Проверяю на прощальные слова...")
                 
-                # Проверяем только новые сообщения (с последнего индекса до текущего)
-                new_messages = messages[self.last_message_index + 1:]
+                # Проверяем, есть ли прощальные слова в сообщении
+                for word in farewell_words:
+                    if word in current_last:
+                        print(f"    ✓ Обнаружено прощальное слово: '{word}'")
+                        self.last_farewell_index = current_index
+                        self.last_farewell_text = current_last
+                        return True
                 
-                for msg in new_messages:
-                    text = msg.text.lower().strip()
-                    for word in farewell_words:
-                        if word in text:
-                            print(f"✓ Обнаружено прощальное сообщение: '{msg.text}'")
-                            self.last_message_index = current_index
-                            self.last_message_text = messages[-1].text.strip()
-                            return True
-                
-                # Обновляем индекс и текст
-                self.last_message_index = current_index
-                self.last_message_text = messages[-1].text.strip()
+                # Обновляем индекс и текст даже если не нашли прощание
+                self.last_farewell_index = current_index
+                self.last_farewell_text = current_last
+                print(f"    ⚠ Прощальных слов не найдено")
+            else:
+                print(f"    ⚠ Новых сообщений нет")
             
             return False
             
@@ -528,6 +532,10 @@ class TSUAssistantBot:
     def farewell_in_chat(self):
         """Отправка прощания в чат при обнаружении прощальных сообщений"""
         try:
+            # Если ещё не поздоровались, пропускаем
+            if not self.greeted:
+                return False
+            
             # Если уже прощались, пропускаем
             if self.farewelled:
                 return False
@@ -558,11 +566,16 @@ class TSUAssistantBot:
             time.sleep(2)
             messages = self.driver.find_elements(By.CSS_SELECTOR, "span.external-chatMessage[imarker='messageContent']")
             if messages:
-                self.last_message_index = len(messages) - 1  # Запоминаем индекс последнего
-                self.last_message_text = messages[-1].text.strip()
-                print(f"✓ В чате {len(messages)} сообщений, последнее: '{self.last_message_text[:50]}...'")
+                self.last_greet_index = len(messages) - 1
+                self.last_farewell_index = len(messages) - 1
+                self.last_greet_text = messages[-1].text.strip()
+                self.last_farewell_text = messages[-1].text.strip().lower()
+                print(f"✓ В чате {len(messages)} сообщений, последнее: '{self.last_greet_text[:50]}...'")
             else:
-                self.last_message_index = -1
+                self.last_greet_index = -1
+                self.last_farewell_index = -1
+                self.last_greet_text = None
+                self.last_farewell_text = None
                 print("✓ Чат пуст, жду первого сообщения")
             
             end_time = time.time() + (duration_minutes * 60)
